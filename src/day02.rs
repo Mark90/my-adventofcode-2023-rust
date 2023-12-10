@@ -1,5 +1,18 @@
 use aoc_runner_derive::aoc;
 
+#[aoc(day2, part2)]
+fn part2(content: &str) -> i32 {
+    content
+        .lines()
+        .map(|line| line.split_once(": ").unwrap().1)
+        .map(|line: &str| {
+            let rgb_max = get_rgb_max(line);
+            rgb_max.0 * rgb_max.1 * rgb_max.2
+        })
+        .sum()
+    // 63711
+}
+
 fn to_rgb(reveal: &str) -> (i32, i32, i32) {
     let reveal_ = reveal.strip_prefix(" ").or_else(|| Some(reveal)).unwrap();
     let (num_cubes_, color) = reveal_.split_once(' ').unwrap();
@@ -12,16 +25,18 @@ fn to_rgb(reveal: &str) -> (i32, i32, i32) {
     }
 }
 
-fn get_id_if_valid_game(line: &str) -> i32 {
-    let (game_id_, reveals_) = line.split_once(": ").unwrap();
+fn get_rgb_max(reveals_: &str) -> (i32, i32, i32) {
     let reveals: Vec<&str> = reveals_.split(&[',', ';']).collect();
     let rgb_vectors: Vec<(i32, i32, i32)> = reveals.iter().map(|reveal| to_rgb(reveal)).collect();
-    let rgb_max: (i32, i32, i32) = rgb_vectors
+    rgb_vectors
         .iter()
         .copied()
         .reduce(|a: (i32, i32, i32), b: (i32, i32, i32)| (a.0.max(b.0), a.1.max(b.1), a.2.max(b.2)))
-        .unwrap();
-
+        .unwrap()
+}
+fn get_id_if_valid_game(line: &str) -> i32 {
+    let (game_id_, reveals) = line.split_once(": ").unwrap();
+    let rgb_max = get_rgb_max(reveals);
     if rgb_max.0 <= 12 && rgb_max.1 <= 13 && rgb_max.2 <= 14 {
         (&game_id_[5..]).parse::<i32>().unwrap()
     } else {
@@ -52,5 +67,10 @@ Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
     #[test]
     fn test_part_1() {
         assert_eq!(part1(&INPUT), 8);
+    }
+
+    #[test]
+    fn test_part_2() {
+        assert_eq!(part2(&INPUT), 2286);
     }
 }
