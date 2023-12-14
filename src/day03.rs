@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use aoc_runner_derive::aoc;
 
 struct Point {
@@ -9,6 +11,11 @@ struct Number {
     value: i32,
     length: i32,
     root: Point,
+}
+
+struct Symbol {
+    char: char,
+    point: Point,
 }
 
 fn parse_and_store_number(
@@ -31,11 +38,11 @@ fn parse_and_store_number(
     });
 }
 
-fn parse_numbers_and_symbols(content: &str) -> (Vec<Number>, Vec<Point>) {
+fn parse_numbers_and_symbols(content: &str) -> (Vec<Number>, Vec<Symbol>) {
     let mut parsing_number: bool;
     let mut number_root_x: usize;
     let mut numbers: Vec<Number> = Vec::new();
-    let mut symbols: Vec<Point> = Vec::new();
+    let mut symbols: Vec<Symbol> = Vec::new();
     for (y, line) in content.lines().enumerate() {
         parsing_number = false;
         number_root_x = 0;
@@ -51,9 +58,12 @@ fn parse_numbers_and_symbols(content: &str) -> (Vec<Number>, Vec<Point>) {
                 parsing_number = false;
             }
             if !ch.is_numeric() && ch != '.' {
-                symbols.push(Point {
-                    x: x as i32,
-                    y: y as i32,
+                symbols.push(Symbol {
+                    char: ch,
+                    point: Point {
+                        x: x as i32,
+                        y: y as i32,
+                    },
                 });
             }
         }
@@ -65,16 +75,17 @@ fn parse_numbers_and_symbols(content: &str) -> (Vec<Number>, Vec<Point>) {
     (numbers, symbols)
 }
 
-fn number_near_symbol(number: &Number, symbol: &Point) -> bool {
+fn number_near_symbol(number: &Number, symbol: &Symbol) -> bool {
     /* There should be a way to calculate this instead of doing a lame loop... eh */
+    let (sx, sy) = (symbol.point.x, symbol.point.y);
     for i in 0..number.length {
         let digit = Point {
             x: number.root.x + i,
             y: number.root.y,
         };
         if {
-            ((symbol.x + 1) >= digit.x && digit.x >= (symbol.x - 1))
-                && ((symbol.y + 1) >= digit.y && digit.y >= (symbol.y - 1))
+            ((sx + 1) >= digit.x && digit.x >= (sx - 1))
+                && ((sy + 1) >= digit.y && digit.y >= (sy - 1))
         } {
             return true;
         }
@@ -84,7 +95,7 @@ fn number_near_symbol(number: &Number, symbol: &Point) -> bool {
 
 #[aoc(day3, part1)]
 fn part1(content: &str) -> i32 {
-    let (numbers, symbols): (Vec<Number>, Vec<Point>) = parse_numbers_and_symbols(content);
+    let (numbers, symbols): (Vec<Number>, Vec<Symbol>) = parse_numbers_and_symbols(content);
 
     let mut sum = 0;
     for number in numbers.iter() {
@@ -97,6 +108,46 @@ fn part1(content: &str) -> i32 {
     }
     sum
     // 528799
+}
+
+#[aoc(day3, part2)]
+fn part2(content: &str) -> i32 {
+    let (numbers, symbols): (Vec<Number>, Vec<Symbol>) = parse_numbers_and_symbols(content);
+
+    let mut sum = 0;
+    let mut points_used: HashSet<(i32, i32)> = HashSet::new();
+    let mut ratio_numbers: Vec<&Number> = Vec::new();
+    for symbol in symbols.iter() {
+        if symbol.char != '*' {
+            continue;
+        }
+
+        ratio_numbers.clear();
+        for number in numbers.iter() {
+            if points_used.contains(&(number.root.x, number.root.y)) {
+                continue;
+            }
+            if number_near_symbol(number, symbol) {
+                ratio_numbers.push(number);
+                if ratio_numbers.len() == 3 {
+                    break;
+                }
+            }
+        }
+
+        if ratio_numbers.len() != 2 {
+            continue;
+        }
+        sum += ratio_numbers
+            .iter()
+            .map(|number| {
+                points_used.insert((number.root.x, number.root.y));
+                number.value
+            })
+            .product::<i32>();
+    }
+    sum
+    // 84907174
 }
 
 #[cfg(test)]
@@ -118,5 +169,10 @@ mod tests {
     #[test]
     fn test_part_1() {
         assert_eq!(part1(&INPUT), 4361);
+    }
+
+    #[test]
+    fn test_part_2() {
+        assert_eq!(part2(&INPUT), 467835);
     }
 }
