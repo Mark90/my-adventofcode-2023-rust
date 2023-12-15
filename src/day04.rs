@@ -6,19 +6,20 @@ use aoc_runner_derive::aoc;
 fn part1(content: &str) -> u32 {
     content
         .lines()
-        .map(|l| {
-            let (first, second) = l.split_once(':').unwrap().1.split_once(" | ").unwrap();
-            let winning: HashSet<i32> =
-                HashSet::from_iter(first.split(" ").filter_map(|c| c.parse::<i32>().ok()));
-            let mine: HashSet<i32> =
-                HashSet::from_iter(second.split(" ").filter_map(|c| c.parse::<i32>().ok()));
-            let my_winning_cards = winning.intersection(&mine).count() as u32;
-            if my_winning_cards == 0 {
-                0
-            } else {
-                2u32.pow(my_winning_cards - 1)
-            }
+        .map(|line| {
+            line.split_once(':')
+                .unwrap()
+                .1
+                .split(" | ")
+                .map(|c: &str| -> HashSet<i32> {
+                    HashSet::from_iter(c.split(" ").filter_map(|c| c.parse::<i32>().ok()))
+                })
+                .reduce(|acc, e| &acc & &e)
+                .unwrap()
+                .len() as u32
         })
+        .filter(|w| w > &0)
+        .map(|w| 2u32.pow(w - 1))
         .sum()
     // 21105
 }
