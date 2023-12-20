@@ -2,24 +2,47 @@ use std::collections::HashSet;
 
 use aoc_runner_derive::aoc;
 
+fn get_matches(card_line: &str) -> usize {
+    card_line
+        .split_once(':')
+        .unwrap()
+        .1
+        .split(" | ")
+        .map(|c: &str| -> HashSet<i32> {
+            HashSet::from_iter(c.split(" ").filter_map(|c| c.parse::<i32>().ok()))
+        })
+        .reduce(|acc, e| &acc & &e)
+        .unwrap()
+        .len() as usize
+}
+
+#[aoc(day4, part2)]
+fn part2(content: &str) -> u32 {
+    let mut card_instances: Vec<u32> = vec![1u32; content.lines().count() + 1];
+
+    for (card_id, card_line) in content.lines().enumerate() {
+        let matches = get_matches(&card_line);
+        if matches == 0 {
+            continue;
+        }
+
+        let card_number = card_id + 1;
+        for next_card_number in card_number + 1..=card_number + matches {
+            card_instances[next_card_number] += card_instances[card_number];
+        }
+    }
+
+    card_instances.iter().sum::<u32>() - 1u32
+    // 5329815
+}
+
 #[aoc(day4, part1)]
 fn part1(content: &str) -> u32 {
     content
         .lines()
-        .map(|line| {
-            line.split_once(':')
-                .unwrap()
-                .1
-                .split(" | ")
-                .map(|c: &str| -> HashSet<i32> {
-                    HashSet::from_iter(c.split(" ").filter_map(|c| c.parse::<i32>().ok()))
-                })
-                .reduce(|acc, e| &acc & &e)
-                .unwrap()
-                .len() as u32
-        })
+        .map(get_matches)
         .filter(|w| w > &0)
-        .map(|w| 2u32.pow(w - 1))
+        .map(|w| 2u32.pow(w as u32 - 1))
         .sum()
     // 21105
 }
@@ -39,5 +62,10 @@ Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11";
     #[test]
     fn test_part_1() {
         assert_eq!(part1(&INPUT), 13);
+    }
+
+    #[test]
+    fn test_part_2() {
+        assert_eq!(part2(&INPUT), 30);
     }
 }
