@@ -27,6 +27,26 @@ fn part1(content: &str) -> u32 {
     // 1084752
 }
 
+#[aoc(day6, part2)]
+fn part2(content: &str) -> u64 {
+    let parsed: Vec<u64> = content
+        .replace(" ", "")
+        .lines()
+        .map(|l| l.split_once(':').unwrap().1.parse::<u64>().unwrap())
+        .collect();
+    let race_duration = parsed[0];
+    let record_distance = parsed[1];
+
+    for press_duration in 0..race_duration {
+        let traveled = (race_duration - press_duration) * press_duration;
+        if traveled > record_distance {
+            return race_duration - (2 * press_duration) + 1;
+        }
+    }
+    panic!("not found");
+    // 28228952
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -38,5 +58,10 @@ Distance:  9  40  200";
     #[test]
     fn test_part_1() {
         assert_eq!(part1(&INPUT), 288);
+    }
+
+    #[test]
+    fn test_part_2() {
+        assert_eq!(part2(&INPUT), 71503);
     }
 }
