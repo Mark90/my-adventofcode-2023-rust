@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use aoc_runner_derive::aoc;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 struct Position {
     x: i32,
     y: i32,
@@ -35,7 +35,7 @@ impl Position {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq)]
 enum Shape {
     Horizontal, // -
     Vertical,   // |
@@ -47,6 +47,7 @@ enum Shape {
 
 impl Shape {
     fn connectors(&self, position: &Position) -> (Position, Position) {
+        /* Given a position, return the a tuple of 2 positions to the pipe's connectors  */
         match self {
             Shape::Horizontal => (position.west(), position.east()),
             Shape::Vertical => (position.north(), position.south()),
@@ -63,32 +64,7 @@ enum Tile {
     Pipe { pos: Position, shape: Shape },
 }
 
-// impl Tile {
-//     fn is_connected_to(&self, other: &Tile) -> bool {
-//         match (self, other) {
-//             (Tile::Pipe { pos: p1, shape: s1 }, Tile::Pipe { pos: p2, shape: s2 }) => {
-//                 let c1 = s1.connectors(&p1);
-//                 let c2 = s2.connectors(&p2);
-
-//                 let self_to_other = c1.0 == *p2 || c1.1 == *p2;
-//                 let other_to_self = c2.0 == *p1 || c2.1 == *p1;
-//                 self_to_other && other_to_self
-//             }
-//             _ => false,
-//         }
-//     }
-// }
-
-#[aoc(day10, part1)]
-fn part1(content: &str) -> i32 {
-    // // We'll need the grid dimensions later .. or do we?
-    // let width = content
-    //     .lines()
-    //     .map(|l| l.len())
-    //     .take(1)
-    //     .collect::<Vec<usize>>()[0];
-    // let height = content.lines().count();
-
+fn create_grid(content: &str) -> (HashMap<Position, Tile>, Position, Position) {
     // Create grid of positions mapped to tiles (pipes/ground)
     // Track the animal's location
     let mut grid: HashMap<Position, Tile> = HashMap::new();
@@ -126,22 +102,23 @@ fn part1(content: &str) -> i32 {
     // Derive shape of pipe where the animal resides.
     // Would not have been necessary with a sane input format...
     // Assume exactly 2 pipes connect to the animal's current tile - in my input this is the case
-    let animal = _animal.unwrap();
-    let matches: Vec<bool> = vec![animal.north(), animal.east(), animal.south(), animal.west()]
-        .iter()
-        .map(|direction| match grid.get(direction) {
-            None => false,
-            Some(tile) => match tile {
-                Tile::Pipe { pos: p, shape: s } => {
-                    let (c1, c2) = s.connectors(&p);
-                    c1 == animal || c2 == animal
-                }
-                _ => false,
-            },
-        })
-        .collect();
+    let animal: Position = _animal.unwrap();
+    let direction_matches: Vec<bool> =
+        vec![animal.north(), animal.east(), animal.south(), animal.west()]
+            .iter()
+            .map(|direction| match grid.get(direction) {
+                None => false,
+                Some(tile) => match tile {
+                    Tile::Pipe { pos: p, shape: s } => {
+                        let (connector1, connector2) = s.connectors(&p);
+                        connector1 == animal || connector2 == animal
+                    }
+                    _ => false,
+                },
+            })
+            .collect();
 
-    let animal_pipe_shape = match matches[..] {
+    let animal_pipe_shape = match direction_matches[..] {
         // North East South West
         [false, true, false, true] => Shape::Horizontal,
         [true, false, true, false] => Shape::Vertical,
@@ -149,129 +126,64 @@ fn part1(content: &str) -> i32 {
         [false, false, true, true] => Shape::SouthWest,
         [true, true, false, false] => Shape::NorthEast,
         [true, false, false, true] => Shape::NorthWest,
-        _ => panic!("invalid directions"),
+        _ => panic!("invalid direction matches for animal tile"),
     };
 
-    // There we go
+    // Add pipe on animal's tile to the grid and select one of its connectors as next position
     let animal_tile = Tile::Pipe {
         pos: animal.clone(),
         shape: animal_pipe_shape.clone(),
     };
-
     grid.insert(animal.clone(), animal_tile);
+    let (next_position, _) = animal_pipe_shape.connectors(&animal);
 
+    (grid, animal, next_position)
+}
+
+fn discover_main_loop(
+    grid: &HashMap<Position, Tile>,
+    animal: &Position,
+    next_position: Position,
+) -> HashSet<Position> {
     // From the animal's current tile, traverse all pipe connectors until we're back at the start
-    let (ac1, _) = animal_pipe_shape.connectors(&animal);
-    let mut length = 0;
-    let mut cur_pos: Position = ac1.clone();
+    let mut cur_pos: Position = next_position.clone();
     let mut prev_pos: Position = animal.clone();
-    while cur_pos != animal {
-        length += 1;
-        let tile = grid.get(&cur_pos).unwrap();
+    let mut main_loop: HashSet<Position> = HashSet::new();
+    while cur_pos != *animal {
+        main_loop.insert(prev_pos.clone());
+        main_loop.insert(cur_pos.clone());
+        let tile = (*grid).get(&cur_pos).unwrap();
         let (conn1, conn2) = match tile {
-            Tile::Pipe { pos: tp, shape: ts } => ts.connectors(tp),
+            Tile::Pipe {
+                pos: next_pos,
+                shape: next_shape,
+            } => next_shape.connectors(next_pos),
             Tile::Ground => panic!("there's not supposed to be ground here"),
         };
         let next_pos: Position = if conn1 != prev_pos { conn1 } else { conn2 };
         prev_pos = cur_pos;
         cur_pos = next_pos;
     }
-    (length + 1) / 2
+    main_loop.clone()
+}
 
+#[aoc(day10, part1)]
+fn part1(content: &str) -> i32 {
+    let (grid, animal, next_position): (HashMap<Position, Tile>, Position, Position) =
+        create_grid(content);
+
+    let main_loop = discover_main_loop(&grid, &animal, next_position);
+
+    main_loop.len() as i32 / 2
     // 6768
 }
 
 #[aoc(day10, part2)]
 fn part2(content: &str) -> i32 {
-    // Create grid of positions mapped to tiles (pipes/ground)
-    // Track the animal's location
-    let mut grid: HashMap<Position, Tile> = HashMap::new();
-    let mut _animal: Option<Position> = None;
-    for (y, line) in content.lines().enumerate() {
-        for (x, c) in line.chars().enumerate() {
-            let pos = Position {
-                x: x as i32,
-                y: y as i32,
-            };
-            let tile_shape = match c {
-                '|' => Some(Shape::Vertical),
-                '-' => Some(Shape::Horizontal),
-                'L' => Some(Shape::NorthEast),
-                'J' => Some(Shape::NorthWest),
-                'F' => Some(Shape::SouthEast),
-                '7' => Some(Shape::SouthWest),
-                'S' => {
-                    _animal = Some(pos.clone()); // record the position, figure out the shape later
-                    None
-                }
-                _ => None,
-            };
-            let tile = match tile_shape {
-                Some(shape) => Tile::Pipe {
-                    pos: pos.clone(),
-                    shape,
-                },
-                None => Tile::Ground,
-            };
-            grid.insert(pos, tile);
-        }
-    }
+    let (grid, animal, next_position): (HashMap<Position, Tile>, Position, Position) =
+        create_grid(content);
 
-    // Derive shape of pipe where the animal resides.
-    // Would not have been necessary with a sane input format...
-    // Assume exactly 2 pipes connect to the animal's current tile - in my input this is the case
-    let animal = _animal.unwrap();
-    let matches: Vec<bool> = vec![animal.north(), animal.east(), animal.south(), animal.west()]
-        .iter()
-        .map(|direction| match grid.get(direction) {
-            None => false,
-            Some(tile) => match tile {
-                Tile::Pipe { pos: p, shape: s } => {
-                    let (c1, c2) = s.connectors(&p);
-                    c1 == animal || c2 == animal
-                }
-                _ => false,
-            },
-        })
-        .collect();
-
-    let animal_pipe_shape = match matches[..] {
-        // North East South West
-        [false, true, false, true] => Shape::Horizontal,
-        [true, false, true, false] => Shape::Vertical,
-        [false, true, true, false] => Shape::SouthEast,
-        [false, false, true, true] => Shape::SouthWest,
-        [true, true, false, false] => Shape::NorthEast,
-        [true, false, false, true] => Shape::NorthWest,
-        _ => panic!("invalid directions"),
-    };
-
-    // There we go
-    let animal_tile = Tile::Pipe {
-        pos: animal.clone(),
-        shape: animal_pipe_shape.clone(),
-    };
-
-    grid.insert(animal.clone(), animal_tile);
-
-    // From the animal's current tile, traverse all pipe connectors until we're back at the start
-    let (ac1, _) = animal_pipe_shape.connectors(&animal);
-    let mut cur_pos: Position = ac1.clone();
-    let mut prev_pos: Position = animal.clone();
-    let mut main_pipe: HashSet<Position> = HashSet::new();
-    while cur_pos != animal {
-        main_pipe.insert(prev_pos.clone());
-        main_pipe.insert(cur_pos.clone());
-
-        let tile = grid.get(&cur_pos).unwrap();
-        let (conn1, conn2) = match tile {
-            Tile::Pipe { pos: tp, shape: ts } => ts.connectors(tp),
-            Tile::Ground => panic!("there's not supposed to be ground here"),
-        };
-        let next_pos: Position = if conn1 != prev_pos { conn1 } else { conn2 };
-        prev_pos = cur_pos;
-        cur_pos = next_pos;
-    }
+    let main_loop = discover_main_loop(&grid, &animal, next_position);
 
     let width = content
         .lines()
@@ -282,122 +194,62 @@ fn part2(content: &str) -> i32 {
 
     let mut count_enclosed = 0;
 
+    // Traverse the grid line by line. When crossing a vertical pipe that is part of the main loop, every
+    // subsequent ground or junk-pipe is enclosed by the loop. When encountering another vertical tile,
+    // subsequent tiles are not enclosed by the loop. Special handling is needed for 'zigzag'
+    // pipes like L7 and FJ (optionally including horizontal pipes) which function as a vertical pipe.
+    // But pipes like LJ and F7 are 'U-turns' which don't change the state of the loop.
+    // Credits to @MPinna for the idea!
     for y in 0..height {
         let mut currently_enclosed = false;
         let mut last_curve_shape: Option<Shape> = None;
         for x in 0..width {
             let pos = Position { x, y };
             let tile = grid.get(&pos).unwrap();
-            if currently_enclosed {
-                match tile {
-                    Tile::Ground => {
-                        count_enclosed += 1;
-                        println!("{:?} inc count to {} for ground", pos, count_enclosed);
-
+            match tile {
+                Tile::Ground => count_enclosed += currently_enclosed as i32,
+                Tile::Pipe {
+                    pos: _,
+                    shape: current_shape,
+                } => {
+                    if !main_loop.contains(&pos) {
+                        // junk pipe
+                        count_enclosed += currently_enclosed as i32;
+                        continue;
                     }
-                    Tile::Pipe {
-                        pos: tpos,
-                        shape: current_shape,
-                    } => {
-                        if !main_pipe.contains(&tpos) {
-                            // junk pipe
-                            count_enclosed += 1;
-                            println!("{:?} inc count to {} for junk {:?}", pos, count_enclosed, current_shape);
-                            continue;
-                        }
-                        if current_shape == &Shape::Horizontal {
-                            // Continuing a curve
-                            continue;
-                        }
-                        if current_shape == &Shape::Vertical {
-                            // this ends the current enclosure
-                            last_curve_shape = None;
-                            currently_enclosed = false;
-                            println!("{:?} end enclosure with shape {:?}", pos, current_shape);
-
-                            continue;
-                        }
-
-                        // Current shape is a curve ..
-
-                        let last_curve = match last_curve_shape {
-                            Some(i) => i, // We've already seen a curve
-                            None => {
-                                // Not yet in a curve, store it and move on
-                                last_curve_shape = Some(current_shape.clone());
-                                continue;
-                            }
-                        };
-
-                        let zigzag = match (&last_curve, current_shape) {
-                            (Shape::NorthEast, Shape::SouthWest) => true,
-                            (Shape::SouthEast, Shape::NorthWest) => true,
-                            _ => false,
-                        };
-
-                        if zigzag {
-                            // L7, L---7, FJ, F---J, etc are zigzags that function the same as a |
-                            last_curve_shape = None;
-                            currently_enclosed = false;
-                            println!("{:?} end enclosure with zigzag shape {:?} {:?}", pos, last_curve, current_shape);
-
-                            continue;
-                        }
-
-                        println!("{:?} Last shape {:?} and current shape {:?} form a U-turn -> do not end enclosure, reset last shape", pos, last_curve, current_shape);
+                    if current_shape == &Shape::Horizontal {
+                        // Continuing a curve
+                        continue;
+                    }
+                    if current_shape == &Shape::Vertical {
+                        // flip the enclosure
                         last_curve_shape = None;
+                        currently_enclosed = !currently_enclosed;
+                        continue;
                     }
-                }
-            } else {
-                // Not enclosed
-                match tile {
-                    Tile::Ground => continue,
-                    Tile::Pipe {
-                        pos: tpos,
-                        shape: current_shape,
-                    } => {
-                        if !main_pipe.contains(&tpos) {
-                            // junk pipe
+
+                    // Current shape is a curve ..
+                    let last_curve = match last_curve_shape {
+                        Some(i) => i, // We've already seen a curve
+                        None => {
+                            // Not yet in a curve, store it and move on
+                            last_curve_shape = Some(current_shape.clone());
                             continue;
                         }
-                        if current_shape == &Shape::Horizontal {
-                            // Continuing a curve
-                            continue;
-                        }
-                        if current_shape == &Shape::Vertical {
-                            // this starts a new enclosure
-                            println!("{:?} start enclosure with shape {:?}", pos, current_shape);
+                    };
 
-                            currently_enclosed = true;
-                            continue;
-                        }
-
-                        // Current shape is a curve ..
-                        let last_curve = match last_curve_shape {
-                            Some(i) => i, // We've already seen a curve
-                            None => {
-                                // Not yet in a curve, store it and move on
-                                last_curve_shape = Some(current_shape.clone());
-                                continue;
-                            }
-                        };
-
-                        let zigzag = match (&last_curve, current_shape) {
-                            (Shape::NorthEast, Shape::SouthWest) => true,
-                            (Shape::SouthEast, Shape::NorthWest) => true,
-                            _ => false,
-                        };
-
-                        if zigzag {
-                            // L7, L---7, FJ, F---J, etc are zigzags that function the same as a |
-                            last_curve_shape = None;
-                            println!("{:?} start enclosure with zigzag shape {:?} {:?}", pos, last_curve, current_shape);
-                            currently_enclosed = true;
-                            continue;
-                        }
-                        println!("{:?} Last shape {:?} and current shape {:?} form a U-turn -> do not start enclosure, reset last_shape", pos, last_curve, current_shape);
+                    if match (&last_curve, current_shape) {
+                        (Shape::NorthEast, Shape::SouthWest) => true,
+                        (Shape::SouthEast, Shape::NorthWest) => true,
+                        _ => false,
+                    } {
+                        // L7, L---7, FJ, F---J, etc are zigzags that function the same as a |, flip the enclosure
                         last_curve_shape = None;
+                        currently_enclosed = !currently_enclosed;
+                        continue;
                     }
+
+                    last_curve_shape = None;
                 }
             }
         }
